@@ -208,7 +208,7 @@ window.onerror = function(msg, src, line, col, err) {
     ' &nbsp;<button onclick="this.parentNode.remove()" style="float:right;background:#333;color:#ccc;border:1px solid #555;border-radius:3px;cursor:pointer;padding:1px 6px;font-size:11px">✕</button>';
   return true;
 };
-<\/script>`;
+</script>`;
 
         let injectedHtml = html;
         if (html.includes('<head>')) {
