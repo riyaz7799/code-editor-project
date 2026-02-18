@@ -21,15 +21,18 @@ function App() {
   const [panelMode, setPanelMode] = useState(() => sessionStorage.getItem('panelMode') || 'console');
   const [previewSrc, setPreviewSrc] = useState(() => sessionStorage.getItem('previewSrc') || '');
   const [lastRunLang, setLastRunLang] = useState(() => sessionStorage.getItem('lastRunLang') || '');
+  const [hasRun, setHasRun] = useState(false); // NEW: track if Run has been clicked
+  const [bottomPanelHeight, setBottomPanelHeight] = useState(45); // NEW: resizable panel height
 
   const editorRef = useRef(null);
   const chordTimerRef = useRef(null);
   const highlightTimerRef = useRef(null);
   const findInputRef = useRef(null);
   const iframeRef = useRef(null);
+  const resizeHandleRef = useRef(null);
 
   // ─────────────────────────────────────────
-  // LANGUAGE TEMPLATES
+  // LANGUAGE TEMPLATES - MINIMAL for HTML/CSS
   // ─────────────────────────────────────────
   const languageTemplates = {
     javascript: `// JavaScript - Fully Executable in Browser
@@ -124,359 +127,29 @@ console.log('\\n=== Done! ===');`,
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Live HTML Preview</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
-      color: #fff;
-      min-height: 100vh;
-      padding: 20px;
-    }
-    h1 {
-      text-align: center;
-      font-size: 2em;
-      margin-bottom: 20px;
-      background: linear-gradient(135deg, #e94560, #f97316);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-    .card {
-      background: rgba(255,255,255,0.07);
-      border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 12px;
-      padding: 16px;
-      text-align: center;
-      transition: transform 0.3s, box-shadow 0.3s;
-      cursor: pointer;
-    }
-    .card:hover { transform: translateY(-5px); box-shadow: 0 10px 25px rgba(233,69,96,0.25); }
-    .card .icon { font-size: 2em; margin-bottom: 8px; }
-    .card h3 { color: #e94560; font-size: 0.9em; margin-bottom: 4px; }
-    .card p { font-size: 0.75em; opacity: 0.7; }
-    .section {
-      background: rgba(255,255,255,0.05);
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 14px;
-      border: 1px solid rgba(255,255,255,0.08);
-    }
-    .section-title { color: #4ec9b0; font-weight: 700; margin-bottom: 10px; font-size: 0.9em; }
-    .btn {
-      background: linear-gradient(135deg, #e94560, #c62a47);
-      color: #fff; border: none;
-      padding: 8px 16px; border-radius: 20px;
-      cursor: pointer; font-weight: 600; font-size: 12px;
-      margin: 3px; transition: all 0.25s;
-    }
-    .btn:hover { transform: scale(1.06); box-shadow: 0 4px 14px rgba(233,69,96,0.45); }
-    .btn.blue { background: linear-gradient(135deg, #007acc, #0098ff); }
-    .counter-num { font-size: 3em; font-weight: 800; color: #e94560; text-align: center; padding: 8px; }
-    .bar-row { margin: 6px 0; }
-    .bar-label { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px; }
-    .bar-track { background: rgba(255,255,255,0.08); border-radius: 8px; height: 13px; overflow: hidden; }
-    .bar-fill { height: 100%; border-radius: 8px; transition: width 0.5s ease; }
-    .js-fill { background: linear-gradient(to right, #f7df1e, #f0c800); }
-    .html-fill { background: linear-gradient(to right, #e34f26, #f06529); }
-    .css-fill { background: linear-gradient(to right, #264de4, #2965f1); }
-    table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    th { background: rgba(78,201,176,0.25); padding: 8px 10px; text-align: left; }
-    td { padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,0.07); }
-    tr:hover td { background: rgba(255,255,255,0.04); }
-    #output {
-      background: rgba(0,0,0,0.35); border-radius: 8px;
-      padding: 10px; margin-top: 8px;
-      font-family: monospace; color: #4ade80;
-      font-size: 12px; min-height: 40px; line-height: 1.6;
-    }
-  </style>
+  <title>HTML Page</title>
 </head>
 <body>
-  <h1>🚀 Live HTML Preview</h1>
-
-  <div class="grid">
-    <div class="card"><div class="icon">⚡</div><h3>JavaScript</h3><p>Real execution</p></div>
-    <div class="card"><div class="icon">🌐</div><h3>HTML</h3><p>Visual preview</p></div>
-    <div class="card"><div class="icon">🎨</div><h3>CSS</h3><p>Applied styles</p></div>
-    <div class="card"><div class="icon">🔥</div><h3>Interactive</h3><p>Fully functional!</p></div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">🎮 Counter</div>
-    <div class="counter-num" id="counter">0</div>
-    <div style="text-align:center">
-      <button class="btn" onclick="changeCount(-5)">-5</button>
-      <button class="btn" onclick="changeCount(-1)">-1</button>
-      <button class="btn blue" onclick="resetCount()">Reset</button>
-      <button class="btn" onclick="changeCount(1)">+1</button>
-      <button class="btn" onclick="changeCount(5)">+5</button>
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">📊 Skill Bars</div>
-    <div class="bar-row">
-      <div class="bar-label"><span>JavaScript</span><span id="js-pct">85%</span></div>
-      <div class="bar-track"><div class="bar-fill js-fill" id="js-bar" style="width:85%"></div></div>
-    </div>
-    <div class="bar-row">
-      <div class="bar-label"><span>HTML</span><span id="html-pct">92%</span></div>
-      <div class="bar-track"><div class="bar-fill html-fill" id="html-bar" style="width:92%"></div></div>
-    </div>
-    <div class="bar-row">
-      <div class="bar-label"><span>CSS</span><span id="css-pct">78%</span></div>
-      <div class="bar-track"><div class="bar-fill css-fill" id="css-bar" style="width:78%"></div></div>
-    </div>
-    <button class="btn blue" style="margin-top:8px" onclick="randomizeBars()">🎲 Randomize</button>
-  </div>
-
-  <div class="section">
-    <div class="section-title">📋 Table</div>
-    <table>
-      <thead><tr><th>Language</th><th>Year</th><th>Browser?</th></tr></thead>
-      <tbody>
-        <tr><td>JavaScript</td><td>1995</td><td>✅ Yes</td></tr>
-        <tr><td>HTML</td><td>1993</td><td>✅ Yes</td></tr>
-        <tr><td>CSS</td><td>1996</td><td>✅ Yes</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="section">
-    <div class="section-title">⚡ Live Output</div>
-    <button class="btn" onclick="showCurrentTime()">🕐 Time</button>
-    <button class="btn" onclick="showSquares()">🔢 Squares</button>
-    <button class="btn" onclick="showRandomNums()">🎲 Random</button>
-    <button class="btn blue" onclick="clearOutput()">🗑️ Clear</button>
-    <div id="output">Click a button above...</div>
-  </div>
-
-  <script>
-    // All functions defined at top level - fully self contained
-    var counterVal = 0;
-
-    function changeCount(val) {
-      counterVal += val;
-      document.getElementById('counter').textContent = counterVal;
-    }
-
-    function resetCount() {
-      counterVal = 0;
-      document.getElementById('counter').textContent = 0;
-    }
-
-    function randomizeBars() {
-      var ids = ['js', 'html', 'css'];
-      ids.forEach(function(id) {
-        var v = Math.floor(Math.random() * 35) + 60;
-        document.getElementById(id + '-bar').style.width = v + '%';
-        document.getElementById(id + '-pct').textContent = v + '%';
-      });
-    }
-
-    function showCurrentTime() {
-      var n = new Date();
-      document.getElementById('output').innerHTML =
-        '📅 ' + n.toLocaleDateString() + '&nbsp;&nbsp;⏰ ' + n.toLocaleTimeString();
-    }
-
-    function showSquares() {
-      var result = [1,2,3,4,5].map(function(i) { return i + '² = ' + (i*i); }).join('  |  ');
-      document.getElementById('output').textContent = result;
-    }
-
-    function showRandomNums() {
-      var nums = [];
-      for(var i = 0; i < 6; i++) nums.push(Math.floor(Math.random() * 100));
-      var sum = nums.reduce(function(a,b){return a+b;}, 0);
-      document.getElementById('output').textContent =
-        'Numbers: ' + nums.join(', ') + '  |  Max: ' + Math.max.apply(null, nums) + '  |  Sum: ' + sum;
-    }
-
-    function clearOutput() {
-      document.getElementById('output').textContent = 'Cleared!';
-    }
-  </script>
+  <h1>Hello HTML!</h1>
+  <p>Start building your HTML page here.</p>
 </body>
 </html>`,
 
-    css: `/* CSS Preview Demo */
-/* Click ▶ Run — see your CSS applied to a real HTML template! */
-
-:root {
-  --primary: #7c3aed;
-  --secondary: #06b6d4;
-  --accent: #f59e0b;
-  --success: #10b981;
-  --bg: #0f172a;
-  --surface: rgba(255,255,255,0.05);
-  --border: rgba(255,255,255,0.1);
-  --text: #e2e8f0;
-  --radius: 14px;
-  --shadow: 0 8px 32px rgba(0,0,0,0.4);
-  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-* { margin: 0; padding: 0; box-sizing: border-box; }
+    css: `/* Add your CSS styles here */
 
 body {
-  font-family: 'Segoe UI', system-ui, sans-serif;
-  background: var(--bg);
-  background-image:
-    radial-gradient(ellipse at top left, rgba(124,58,237,0.15) 0%, transparent 50%),
-    radial-gradient(ellipse at bottom right, rgba(6,182,212,0.15) 0%, transparent 50%);
-  color: var(--text);
-  min-height: 100vh;
-  padding: 24px;
-  line-height: 1.6;
+  font-family: Arial, sans-serif;
+  margin: 20px;
+  background: #f5f5f5;
 }
 
 h1 {
-  font-size: 2rem;
-  font-weight: 800;
-  background: linear-gradient(135deg, var(--primary), var(--secondary));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin-bottom: 6px;
+  color: #333;
 }
 
-h2 { font-size: 1.05rem; font-weight: 700; color: var(--secondary); margin-bottom: 12px; }
-p { color: rgba(226,232,240,0.8); font-size: 0.88rem; }
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 14px;
-  margin-bottom: 18px;
-}
-
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 20px;
-  backdrop-filter: blur(16px);
-  box-shadow: var(--shadow);
-  transition: var(--transition);
-  position: relative;
-  overflow: hidden;
-}
-
-.card:hover {
-  transform: translateY(-5px);
-  border-color: var(--primary);
-  box-shadow: 0 18px 44px rgba(124,58,237,0.22);
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 9px 20px;
-  font-size: 13px;
-  font-weight: 600;
-  border: none;
-  border-radius: 50px;
-  cursor: pointer;
-  transition: var(--transition);
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, var(--primary), #9f67ff);
-  color: white;
-  box-shadow: 0 4px 14px rgba(124,58,237,0.35);
-}
-
-.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(124,58,237,0.5); }
-
-.btn-secondary {
-  background: linear-gradient(135deg, var(--secondary), #22d3ee);
-  color: #0f172a;
-  box-shadow: 0 4px 14px rgba(6,182,212,0.35);
-}
-
-.btn-secondary:hover { transform: translateY(-2px); }
-
-.btn-outline {
-  background: transparent;
-  color: var(--primary);
-  border: 2px solid var(--primary);
-}
-
-.btn-outline:hover { background: var(--primary); color: white; transform: translateY(-2px); }
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 10px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-}
-
-.badge-purple { background: rgba(124,58,237,0.15); color: #a78bfa; border: 1px solid rgba(124,58,237,0.3); }
-.badge-cyan   { background: rgba(6,182,212,0.15);  color: #67e8f9; border: 1px solid rgba(6,182,212,0.3); }
-.badge-amber  { background: rgba(245,158,11,0.15); color: #fcd34d; border: 1px solid rgba(245,158,11,0.3); }
-.badge-green  { background: rgba(16,185,129,0.15); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.3); }
-
-input, textarea {
-  width: 100%;
-  padding: 10px 14px;
-  background: rgba(255,255,255,0.04);
-  border: 2px solid var(--border);
-  border-radius: 9px;
-  color: var(--text);
-  font-size: 13px;
-  transition: var(--transition);
-  margin-bottom: 9px;
-}
-
-input:focus, textarea:focus {
-  outline: none;
-  border-color: var(--primary);
-  background: rgba(124,58,237,0.05);
-  box-shadow: 0 0 0 3px rgba(124,58,237,0.15);
-}
-
-table { width: 100%; border-collapse: collapse; }
-th { background: rgba(124,58,237,0.2); padding: 10px 12px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #a78bfa; }
-td { padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 12px; }
-tr:hover td { background: rgba(124,58,237,0.05); }
-
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(124,58,237,0.4); }
-  50%       { box-shadow: 0 0 0 10px rgba(124,58,237,0); }
-}
-
-.animate-in { animation: fadeInUp 0.5s ease forwards; }
-.animate-pulse { animation: pulse 2s infinite; }
-
-.text-center { text-align: center; }
-.text-primary { color: var(--primary); }
-.flex { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.mt-2 { margin-top: 12px; }
-.mb-2 { margin-bottom: 12px; }
-.w-full { width: 100%; }
-
-@media (max-width: 768px) {
-  .grid { grid-template-columns: 1fr; }
-  h1 { font-size: 1.5rem; }
-  body { padding: 14px; }
+p {
+  color: #666;
+  line-height: 1.6;
 }`
   };
 
@@ -488,7 +161,7 @@ tr:hover td { background: rgba(124,58,237,0.05); }
     window.getHighlightCallCount = () => highlightCount;
   }, [content, undoStack.length, highlightCount]);
 
-  // Persist preview state across page refreshes
+  // Persist preview state across refreshes
   useEffect(() => { sessionStorage.setItem('panelMode', panelMode); }, [panelMode]);
   useEffect(() => { sessionStorage.setItem('previewSrc', previewSrc); }, [previewSrc]);
   useEffect(() => { sessionStorage.setItem('lastRunLang', lastRunLang); }, [lastRunLang]);
@@ -514,20 +187,20 @@ tr:hover td { background: rgba(124,58,237,0.05); }
     if (showFind && findInputRef.current) findInputRef.current.focus();
   }, [showFind]);
 
-  // Write to iframe whenever previewSrc changes
+  // Write to iframe with error handling
   const writeToIframe = useCallback((html) => {
     if (iframeRef.current && html) {
       try {
         const doc = iframeRef.current.contentDocument || iframeRef.current.contentWindow.document;
 
-        // Inject error handler BEFORE any user scripts run
+        // Inject error handler BEFORE user scripts
         const errorScript = `<script>
 window.onerror = function(msg, src, line, col, err) {
   var box = document.getElementById('__error_overlay__');
   if (!box) {
     box = document.createElement('div');
     box.id = '__error_overlay__';
-    box.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#1e1e1e;color:#f48771;font-family:monospace;font-size:12px;padding:10px 14px;border-top:2px solid #f48771;z-index:9999;max-height:80px;overflow:auto;';
+    box.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#1e1e1e;color:#f48771;font-family:monospace;font-size:12px;padding:10px 14px;border-top:2px solid #f48771;z-index:9999;max-height:100px;overflow:auto;';
     document.body.appendChild(box);
   }
   box.innerHTML = '❌ <strong>' + (err ? err.name : 'Error') + ':</strong> ' + msg +
@@ -535,9 +208,8 @@ window.onerror = function(msg, src, line, col, err) {
     ' &nbsp;<button onclick="this.parentNode.remove()" style="float:right;background:#333;color:#ccc;border:1px solid #555;border-radius:3px;cursor:pointer;padding:1px 6px;font-size:11px">✕</button>';
   return true;
 };
-</script>`;
+<\/script>`;
 
-        // Insert error handler right after <head> or at the very start
         let injectedHtml = html;
         if (html.includes('<head>')) {
           injectedHtml = html.replace('<head>', '<head>' + errorScript);
@@ -558,11 +230,46 @@ window.onerror = function(msg, src, line, col, err) {
 
   useEffect(() => {
     if (previewSrc) {
-      // Small delay to ensure iframe is mounted
       const t = setTimeout(() => writeToIframe(previewSrc), 50);
       return () => clearTimeout(t);
     }
   }, [previewSrc, writeToIframe]);
+
+  // NEW: Resizable panel logic
+  useEffect(() => {
+    if (!resizeHandleRef.current) return;
+    
+    let startY = 0;
+    let startHeight = bottomPanelHeight;
+
+    const handleMouseDown = (e) => {
+      startY = e.clientY;
+      startHeight = bottomPanelHeight;
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      e.preventDefault();
+    };
+
+    const handleMouseMove = (e) => {
+      const deltaY = startY - e.clientY;
+      const newHeight = Math.min(Math.max(startHeight + (deltaY / window.innerHeight) * 100, 20), 80);
+      setBottomPanelHeight(newHeight);
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    const handle = resizeHandleRef.current;
+    handle.addEventListener('mousedown', handleMouseDown);
+
+    return () => {
+      handle.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [bottomPanelHeight]);
 
   // ─────────────────────────────────────────
   // HELPERS
@@ -597,6 +304,7 @@ window.onerror = function(msg, src, line, col, err) {
     setPreviewSrc('');
     setPanelMode('console');
     setLastRunLang('');
+    setHasRun(false); // Reset on language change
     sessionStorage.removeItem('previewSrc');
     sessionStorage.setItem('panelMode', 'console');
     sessionStorage.setItem('lastRunLang', '');
@@ -639,22 +347,24 @@ window.onerror = function(msg, src, line, col, err) {
       setConsoleOutput(logs);
       setPanelMode('console');
       setLastRunLang('javascript');
+      setHasRun(true); // Mark as run
       setIsRunning(false);
     }
   };
 
   // ─────────────────────────────────────────
-  // EXECUTE HTML → iframe preview
+  // EXECUTE HTML
   // ─────────────────────────────────────────
   const executeHTML = () => {
     setPreviewSrc(content);
     setLastRunLang('html');
     setPanelMode('preview');
+    setHasRun(true); // Mark as run
     setIsRunning(false);
   };
 
   // ─────────────────────────────────────────
-  // EXECUTE CSS → inject into sample template
+  // EXECUTE CSS
   // ─────────────────────────────────────────
   const executeCSS = () => {
     const sampleHTML = `<!DOCTYPE html>
@@ -731,6 +441,7 @@ window.onerror = function(msg, src, line, col, err) {
     setPreviewSrc(sampleHTML);
     setLastRunLang('css');
     setPanelMode('preview');
+    setHasRun(true); // Mark as run
     setIsRunning(false);
   };
 
@@ -970,7 +681,10 @@ window.onerror = function(msg, src, line, col, err) {
       </div>
 
       <div className="main-layout">
-        <div className="top-section">
+        <div 
+          className="top-section" 
+          style={{ height: hasRun ? `${100 - bottomPanelHeight}%` : '100%' }}
+        >
 
           {/* ─── EDITOR ─── */}
           <div className="editor-section" data-test-id="editor-container">
@@ -1072,100 +786,111 @@ window.onerror = function(msg, src, line, col, err) {
           )}
         </div>
 
-        {/* ─── BOTTOM PANEL ─── */}
-        <div className="bottom-panel">
-          <div className="panel-header">
-            <div className="panel-header-left">
+        {/* ─── BOTTOM PANEL - HIDDEN BY DEFAULT ─── */}
+        {hasRun && (
+          <>
+            {/* Resize Handle */}
+            <div 
+              ref={resizeHandleRef}
+              className="resize-handle"
+              title="Drag to resize"
+            />
 
-              {/* BACK BUTTON - shown in preview mode */}
+            <div 
+              className="bottom-panel" 
+              style={{ height: `${bottomPanelHeight}%` }}
+            >
+              <div className="panel-header">
+                <div className="panel-header-left">
+                  {panelMode === 'preview' && (
+                    <button className="back-btn" onClick={goBackToConsole} title="Back to Console">
+                      ← Back
+                    </button>
+                  )}
+                  <span className="panel-label">
+                    {panelMode === 'console' ? (
+                      <>🖥️ Console {selectedLanguage === 'javascript' && <span className="lang-badge js-badge">JS</span>}</>
+                    ) : (
+                      <>🌐 Live Preview
+                        {lastRunLang === 'html' && <span className="lang-badge html-badge">HTML</span>}
+                        {lastRunLang === 'css'  && <span className="lang-badge css-badge">CSS</span>}
+                      </>
+                    )}
+                  </span>
+                </div>
+
+                <div className="panel-header-right">
+                  {panelMode === 'console' ? (
+                    <>
+                      <button onClick={copyConsoleOutput} className="panel-btn" disabled={!consoleOutput.length}>📋 Copy</button>
+                      <button onClick={clearConsole} className="panel-btn">🗑️ Clear</button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={refreshPreview} className="panel-btn" disabled={!previewSrc}>🔄 Refresh</button>
+                      <button onClick={openPreviewTab} className="panel-btn" disabled={!previewSrc}>🔗 New Tab</button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* ── CONSOLE ── */}
+              {panelMode === 'console' && (
+                <div className="console-output">
+                  {consoleOutput.length === 0
+                    ? <div className="empty-state">
+                        {selectedLanguage === 'javascript'
+                          ? <>Press <kbd>Ctrl+Enter</kbd> or click <strong>▶ Run</strong></>
+                          : <>Press <strong>▶ Run</strong> to see the live visual preview</>
+                        }
+                      </div>
+                    : consoleOutput.map((log,i) => (
+                      <div key={i} className={`console-line console-${log.type}`}>
+                        <span className="c-arrow">›</span>
+                        <span className="c-msg">{log.message}</span>
+                      </div>
+                    ))
+                  }
+                </div>
+              )}
+
+              {/* ── PREVIEW (iframe) ── */}
               {panelMode === 'preview' && (
-                <button className="back-btn" onClick={goBackToConsole} title="Back to Console">
-                  ← Back
-                </button>
-              )}
-
-              <span className="panel-label">
-                {panelMode === 'console' ? (
-                  <>🖥️ Console {selectedLanguage === 'javascript' && <span className="lang-badge js-badge">JS</span>}</>
-                ) : (
-                  <>🌐 Live Preview
-                    {lastRunLang === 'html' && <span className="lang-badge html-badge">HTML</span>}
-                    {lastRunLang === 'css'  && <span className="lang-badge css-badge">CSS</span>}
-                  </>
-                )}
-              </span>
-            </div>
-
-            <div className="panel-header-right">
-              {panelMode === 'console' ? (
-                <>
-                  <button onClick={copyConsoleOutput} className="panel-btn" disabled={!consoleOutput.length}>📋 Copy</button>
-                  <button onClick={clearConsole} className="panel-btn">🗑️ Clear</button>
-                </>
-              ) : (
-                <>
-                  <button onClick={refreshPreview} className="panel-btn" disabled={!previewSrc}>🔄 Refresh</button>
-                  <button onClick={openPreviewTab} className="panel-btn" disabled={!previewSrc}>🔗 New Tab</button>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* ── CONSOLE ── */}
-          {panelMode === 'console' && (
-            <div className="console-output">
-              {consoleOutput.length === 0
-                ? <div className="empty-state">
-                    {selectedLanguage === 'javascript'
-                      ? <>Press <kbd>Ctrl+Enter</kbd> or click <strong>▶ Run</strong></>
-                      : <>Press <strong>▶ Run</strong> to see the live visual preview</>
-                    }
-                  </div>
-                : consoleOutput.map((log,i) => (
-                  <div key={i} className={`console-line console-${log.type}`}>
-                    <span className="c-arrow">›</span>
-                    <span className="c-msg">{log.message}</span>
-                  </div>
-                ))
-              }
-            </div>
-          )}
-
-          {/* ── PREVIEW (iframe) ── */}
-          {panelMode === 'preview' && (
-            <div className="preview-wrapper">
-              {previewSrc ? (
-                <>
-                  <div className="browser-bar">
-                    <div className="browser-dots">
-                      <span className="dot dot-red"></span>
-                      <span className="dot dot-yellow"></span>
-                      <span className="dot dot-green"></span>
+                <div className="preview-wrapper">
+                  {previewSrc ? (
+                    <>
+                      <div className="browser-bar">
+                        <div className="browser-dots">
+                          <span className="dot dot-red"></span>
+                          <span className="dot dot-yellow"></span>
+                          <span className="dot dot-green"></span>
+                        </div>
+                        <div className="browser-url">
+                          {lastRunLang === 'css' ? '🎨 CSS applied to sample template' : '🌐 Live HTML Render'}
+                        </div>
+                        <button className="browser-refresh" onClick={refreshPreview} title="Refresh">↻</button>
+                      </div>
+                      <iframe
+                        ref={iframeRef}
+                        className="preview-iframe"
+                        title="Live Preview"
+                        sandbox="allow-scripts allow-same-origin"
+                      />
+                    </>
+                  ) : (
+                    <div className="preview-empty">
+                      <div className="preview-empty-icon">
+                        {selectedLanguage === 'css' ? '🎨' : '🌐'}
+                      </div>
+                      <p>Click <strong>▶ Run</strong> to see the live visual preview!</p>
+                      <button onClick={runCode} className="run-btn" style={{marginTop:'14px'}}>▶ Run Now</button>
                     </div>
-                    <div className="browser-url">
-                      {lastRunLang === 'css' ? '🎨 CSS applied to sample template' : '🌐 Live HTML Render'}
-                    </div>
-                    <button className="browser-refresh" onClick={refreshPreview} title="Refresh">↻</button>
-                  </div>
-                  <iframe
-                    ref={iframeRef}
-                    className="preview-iframe"
-                    title="Live Preview"
-                    sandbox="allow-scripts allow-same-origin"
-                  />
-                </>
-              ) : (
-                <div className="preview-empty">
-                  <div className="preview-empty-icon">
-                    {selectedLanguage === 'css' ? '🎨' : '🌐'}
-                  </div>
-                  <p>Click <strong>▶ Run</strong> to see the live visual preview!</p>
-                  <button onClick={runCode} className="run-btn" style={{marginTop:'14px'}}>▶ Run Now</button>
+                  )}
                 </div>
               )}
             </div>
-          )}
-        </div>
+          </>
+        )}
       </div>
 
       {/* ─── STATUS BAR ─── */}
@@ -1174,7 +899,7 @@ window.onerror = function(msg, src, line, col, err) {
         <span>Lines: {lineNumbers.length} | Chars: {stats.chars} | Words: {stats.words}</span>
         <span>History: {undoStack.length} | Redo: {redoStack.length}</span>
         <span>{chordState === 'waiting' ? '⏳ Ctrl+K...' : 'Ready'}</span>
-        <span>{panelMode === 'preview' ? '🌐 Preview' : '🖥️ Console'}</span>
+        {hasRun && <span>{panelMode === 'preview' ? '🌐 Preview' : '🖥️ Console'}</span>}
         <span>{theme === 'dark' ? '🌙' : '☀️'}</span>
       </div>
 
